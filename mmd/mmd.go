@@ -113,34 +113,31 @@ func (c *Conn) createSocketConnection() error {
 
 	for {
 		conn, err := net.DialTCP("tcp", nil, addr)
-		if err != nil && c.config.AutoRetry {
-			time.Sleep(c.config.ReconnectInterval)
-			log.Println("Failed to connect :", err)
-			continue
+
+		if err != nil {
+			if c.config.AutoRetry {
+				time.Sleep(c.config.ReconnectInterval)
+				log.Println("Failed to connect :", err)
+				continue
+			} else {
+				return err
+			}
 		}
 
-		if err == nil {
-			conn.SetWriteBuffer(c.config.WriteSz)
-			conn.SetReadBuffer(c.config.ReadSz)
-			c.socket = conn
-			return c.onSocketConnection()
+		conn.SetWriteBuffer(c.config.WriteSz)
+		conn.SetReadBuffer(c.config.ReadSz)
+		c.socket = conn
+		c.writeChan = make(chan []byte)
+		c.startWriter()
+		c.startReader()
+		c.handshake()
+
+		if c.config.OnConnect != nil {
+			return c.config.OnConnect(c)
 		}
 
-		return err
+		return nil
 	}
-}
-
-func (c *Conn) onSocketConnection() error {
-	c.writeChan = make(chan []byte)
-	c.startWriter()
-	c.startReader()
-	c.handshake()
-
-	if c.config.OnConnect != nil {
-		return c.config.OnConnect(c)
-	}
-
-	return nil
 }
 
 // Conn Connection and channel dispatch map
